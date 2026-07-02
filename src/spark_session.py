@@ -1,12 +1,13 @@
 from pyspark.sql import SparkSession
 
-def create_spark_session() -> SparkSession:
+
+def create_spark_session(app_name: str = "crypto-data-lakehouse", master: str = "local[1]", executor_memory: str = "1g") -> SparkSession:
     return (
         SparkSession.builder
-        .master("local[*]")
-        .appName("crypto-data-lakehouse")
-        .config("spark.driver.memory", "4g")
-        .config("spark.sql.shuffle.partitions", "16")
+        .master(master)
+        .appName(app_name)
+        .config("spark.driver.memory", executor_memory)
+        .config("spark.sql.shuffle.partitions", "2")
         .config("spark.sql.session.timeZone", "UTC")
         .getOrCreate()
     )

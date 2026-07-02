@@ -20,7 +20,7 @@ def build_download_url(symbol: str, interval: str, year: int, month: int, kind: 
     )
 
 
-def download_kline_zip(symbol: str, interval: str, year: int, month: int, output_dir: Path, kind: str = "monthly") -> Path:
+def download_kline_zip(symbol: str, interval: str, year: int, month: int, output_dir: Path, kind: str = "monthly") -> Path | None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     file_name = f"{symbol.upper()}-{interval}-{year:04d}-{month:02d}.zip"
@@ -33,6 +33,9 @@ def download_kline_zip(symbol: str, interval: str, year: int, month: int, output
 
     print(f"Downloading {url}")
     response = requests.get(url, timeout=60)
+    if response.status_code == 404:
+        print(f"Skip missing file: {url}")
+        return None
     response.raise_for_status()
 
     target_path.write_bytes(response.content)
