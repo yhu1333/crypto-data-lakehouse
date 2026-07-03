@@ -63,36 +63,39 @@ docker run --rm crypto-data-lakehouse
 ```
 
 Verified end-to-end: build succeeds (~1.6GB image), Spark initializes on the container's
-JVM, and a full pipeline run against all 3 symbols produces the same `status: pass` quality
-report as the local run. The base image's Debian release only ships OpenJDK 21/25 (no 17),
-so the Dockerfile installs `openjdk-21-jre-headless` — Spark 4.x supports Java 21, and a
-headless JRE is enough since nothing gets compiled in the container.
+JVM, and a containerized pipeline run reproduces the same `status: pass` quality report as
+the local run (verified at the 3-symbol/1-year scale; the full 6-symbol/4-year run above was
+executed locally). The base image's Debian release only ships OpenJDK 21/25 (no 17), so the
+Dockerfile installs `openjdk-21-jre-headless` — Spark 4.x supports Java 21, and a headless
+JRE is enough since nothing gets compiled in the container.
 
 ## Current run results
 
-Full-volume run: 3 symbols (BTCUSDT, ETHUSDT, BNBUSDT), 1-minute interval, full year 2025.
+Full-volume run: 6 symbols (BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT, ADAUSDT), 1-minute
+interval, 2022-01 through 2025-12 (4 years).
 
 | Layer | Size on disk | Partitions |
 |---|---|---|
-| landing | 321M | 36 monthly CSV/zip sets |
-| raw | 115M | 36 (`symbol` x `year_month`) |
-| refined | 114M | 36 |
-| curated | 175M | 36 |
+| landing | 2.2G | 288 monthly CSV/zip sets |
+| raw | 826M | 288 (`symbol` x `year_month`) |
+| refined | 823M | 288 |
+| curated | 1.2G | 288 |
 
-- **Row count**: 1,576,800 curated rows (525,600 per symbol — exactly one row per minute
-  for the full year, zero gaps).
+- **Row count**: 12,622,559 curated rows across all 6 symbols (~2.1M per symbol over 4
+  years — one row per minute, essentially zero gaps).
 - **Quality report** (`data/quality/quality_report.json`): `status: pass` — 0 nulls in key
-  fields, 0 invalid prices, 0 duplicates, completeness ratio 1.0 for all 3 symbols, 0 rows
+  fields, 0 invalid prices, 0 duplicates, completeness ratio ~0.99996 for every symbol
+  (the shortfall is a handful of exchange-downtime minutes, not a pipeline defect), 0 rows
   dropped between raw and refined.
 
 ## Design decisions
 
 - **Partitioning granularity**: initially partitioned by `symbol` + calendar day, which for
-  1-minute data created ~1,000+ tiny partitions and ballooned `data/raw` to 7-8GB with heavy
-  small-file overhead. Repartitioned to `symbol` + `year_month` (36 partitions total),
-  which cut total lake size to under 1GB and made writes dramatically faster — a concrete
-  example of matching partition grain to query/row-density patterns rather than defaulting
-  to the finest available column.
+  1-minute data created ~1,000+ tiny partitions and ballooned `data/raw` to 7-8GB (with only
+  3 symbols x 1 year) from small-file overhead. Repartitioned to `symbol` + `year_month`,
+  which cut `data/raw` for that same run to 115MB and made writes dramatically faster — a
+  concrete example of matching partition grain to query/row-density patterns rather than
+  defaulting to the finest available column.
 - **Timestamp precision**: Binance's `data.binance.vision` kline dumps switched from
   millisecond to microsecond epoch timestamps starting with 2025 data, with no flag in the
   file to distinguish them. `transforms/raw.py` normalizes both `open_time` and `close_time`

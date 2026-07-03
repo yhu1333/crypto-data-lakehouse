@@ -1,19 +1,37 @@
 sources:
   - symbol: BTCUSDT
     interval: 1m
-    start_year: 2025
+    start_year: 2022
     start_month: 1
     end_year: 2025
     end_month: 12
   - symbol: ETHUSDT
     interval: 1m
-    start_year: 2025
+    start_year: 2022
     start_month: 1
     end_year: 2025
     end_month: 12
   - symbol: BNBUSDT
     interval: 1m
-    start_year: 2025
+    start_year: 2022
+    start_month: 1
+    end_year: 2025
+    end_month: 12
+  - symbol: SOLUSDT
+    interval: 1m
+    start_year: 2022
+    start_month: 1
+    end_year: 2025
+    end_month: 12
+  - symbol: XRPUSDT
+    interval: 1m
+    start_year: 2022
+    start_month: 1
+    end_year: 2025
+    end_month: 12
+  - symbol: ADAUSDT
+    interval: 1m
+    start_year: 2022
     start_month: 1
     end_year: 2025
     end_month: 12
