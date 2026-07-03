@@ -178,7 +178,7 @@ Performance tuning (partition sizing, caching), more tests, cleanup.
 ## 7. Resume bullets (fill bracketed values after building)
 
 **Crypto Market Data Lakehouse** — *PySpark, Parquet, Docker, GitHub Actions CI/CD*
-- Built a distributed ETL pipeline in PySpark ingesting ~[N]M rows of multi-symbol OHLCV market data, integrating disparate feeds into a unified, well-modeled "golden copy" stored as partitioned Parquet.
+- Built a distributed ETL pipeline in PySpark ingesting ~1.6M rows of multi-symbol OHLCV market data, integrating disparate feeds into a unified, well-modeled "golden copy" stored as partitioned Parquet.
 - Designed a layered (raw → refined → curated) lakehouse with explicit schemas, deduplication, gap detection, and Spark window-function metrics (moving averages, VWAP, rolling volatility).
 - Implemented data-quality and reconciliation controls (completeness, validity, continuity, raw-to-refined row reconciliation) emitting a structured per-run quality report.
 - Containerized the pipeline with Docker and added a GitHub Actions CI/CD workflow (lint + pytest on Spark transforms).

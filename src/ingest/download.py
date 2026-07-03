@@ -1,6 +1,7 @@
-from pathlib import Path
-import requests
 import zipfile
+from pathlib import Path
+
+import requests
 
 BASE_URL = "https://data.binance.vision/data/spot"
 
@@ -20,7 +21,9 @@ def build_download_url(symbol: str, interval: str, year: int, month: int, kind: 
     )
 
 
-def download_kline_zip(symbol: str, interval: str, year: int, month: int, output_dir: Path, kind: str = "monthly") -> Path | None:
+def download_kline_zip(
+    symbol: str, interval: str, year: int, month: int, output_dir: Path, kind: str = "monthly"
+) -> Path | None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     file_name = f"{symbol.upper()}-{interval}-{year:04d}-{month:02d}.zip"

@@ -1,31 +1,11 @@
+import sys
 from pathlib import Path
+
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import (
-    DoubleType,
-    LongType,
-    StringType,
-    StructField,
-    StructType,
-)
 
-
-RAW_SCHEMA = StructType(
-    [
-        StructField("open_time", LongType(), True),
-        StructField("open", DoubleType(), True),
-        StructField("high", DoubleType(), True),
-        StructField("low", DoubleType(), True),
-        StructField("close", DoubleType(), True),
-        StructField("volume", DoubleType(), True),
-        StructField("close_time", LongType(), True),
-        StructField("quote_asset_volume", DoubleType(), True),
-        StructField("num_trades", LongType(), True),
-        StructField("taker_buy_base", DoubleType(), True),
-        StructField("taker_buy_quote", DoubleType(), True),
-        StructField("ignore", StringType(), True),
-    ]
-)
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from models.schema import RAW_KLINE_SCHEMA
 
 
 def read_landing_csv(spark: SparkSession, csv_path: str) -> DataFrame:
@@ -33,18 +13,35 @@ def read_landing_csv(spark: SparkSession, csv_path: str) -> DataFrame:
         spark.read.format("csv")
         .option("header", "false")
         .option("inferSchema", "false")
-        .schema(RAW_SCHEMA)
+        .schema(RAW_KLINE_SCHEMA)
         .load(csv_path)
     )
+
+
+MICROSECOND_THRESHOLD = 10**14  # any real epoch-ms value is well below this; epoch-us values are well above it
+
+
+def _to_epoch_millis(col: str):
+    """Binance's kline dumps switched open_time/close_time from millisecond to
+    microsecond precision starting with 2025 data (data.binance.vision), with no
+    flag in the file to tell you which one you got. Normalize both to milliseconds
+    so every downstream stage (gap detection, completeness) can assume one unit."""
+    return F.when(F.col(col) > F.lit(MICROSECOND_THRESHOLD), (F.col(col) / 1000).cast("long")).otherwise(F.col(col))
 
 
 def transform_raw(df: DataFrame, symbol: str) -> DataFrame:
     return (
         df.withColumn("symbol", F.lit(symbol))
+        .withColumn("open_time", _to_epoch_millis("open_time"))
+        .withColumn("close_time", _to_epoch_millis("close_time"))
         .withColumn("open_time_dt", F.from_unixtime(F.col("open_time") / 1000).cast("timestamp"))
         .withColumn("close_time_dt", F.from_unixtime(F.col("close_time") / 1000).cast("timestamp"))
+        .withColumn("date", F.to_date("open_time_dt"))
+        .withColumn("year_month", F.date_format("open_time_dt", "yyyy-MM"))
         .select(
             "symbol",
+            "date",
+            "year_month",
             "open_time",
             "open_time_dt",
             "open",
@@ -65,7 +62,7 @@ def transform_raw(df: DataFrame, symbol: str) -> DataFrame:
 def write_raw(df: DataFrame, output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
-    df.write.mode("overwrite").partitionBy("symbol").parquet(str(output_path))
+    df.write.mode("overwrite").partitionBy("symbol", "year_month").parquet(str(output_path))
 
 
 def run_raw_pipeline(spark: SparkSession, csv_path: str, output_dir: str, symbol: str) -> DataFrame:
@@ -76,10 +73,6 @@ def run_raw_pipeline(spark: SparkSession, csv_path: str, output_dir: str, symbol
 
 
 if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
     from spark_session import create_spark_session
 
     spark = create_spark_session()

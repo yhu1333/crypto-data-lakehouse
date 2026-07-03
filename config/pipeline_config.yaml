@@ -25,5 +25,6 @@ paths:
   quality_output: data/quality
 spark:
   app_name: crypto-data-lakehouse
-  master: local[1]
-  executor_memory: 1g
+  master: "local[*]"
+  driver_memory: 4g
+  shuffle_partitions: "16"

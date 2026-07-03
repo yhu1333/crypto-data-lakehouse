@@ -4,6 +4,8 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
+VOLATILITY_WINDOW = 20
+
 
 def read_refined(spark: SparkSession, input_path: str) -> DataFrame:
     return spark.read.parquet(input_path)
@@ -11,10 +13,10 @@ def read_refined(spark: SparkSession, input_path: str) -> DataFrame:
 
 def add_time_ordering(df: DataFrame) -> DataFrame:
     window_spec = Window.partitionBy("symbol").orderBy("open_time")
-    return (
-        df.withColumn("prev_close", F.lag("close", 1).over(window_spec))
-        .withColumn("returns", F.when(F.col("prev_close").isNotNull(), (F.col("close") / F.col("prev_close") - 1).cast("double")).otherwise(F.lit(None)))
-    )
+    returns_expr = F.when(
+        F.col("prev_close").isNotNull(), (F.col("close") / F.col("prev_close") - 1).cast("double")
+    ).otherwise(F.lit(None))
+    return df.withColumn("prev_close", F.lag("close", 1).over(window_spec)).withColumn("returns", returns_expr)
 
 
 def add_moving_averages(df: DataFrame, window_sizes: list[int]) -> DataFrame:
@@ -31,7 +33,9 @@ def add_moving_averages(df: DataFrame, window_sizes: list[int]) -> DataFrame:
 
 
 def add_vwap(df: DataFrame) -> DataFrame:
-    window_spec = Window.partitionBy("symbol").orderBy("open_time").rowsBetween(Window.unboundedPreceding, Window.currentRow)
+    window_spec = (
+        Window.partitionBy("symbol").orderBy("open_time").rowsBetween(Window.unboundedPreceding, Window.currentRow)
+    )
     price_volume = F.col("close") * F.col("volume")
     cum_volume = F.sum("volume").over(window_spec)
     cum_price_volume = F.sum(price_volume).over(window_spec)
@@ -39,10 +43,18 @@ def add_vwap(df: DataFrame) -> DataFrame:
     return df.withColumn("vwap", (cum_price_volume / cum_volume).cast("double"))
 
 
+def add_rolling_volatility(df: DataFrame, window_size: int = VOLATILITY_WINDOW) -> DataFrame:
+    """Rolling stddev of period returns, a standard realized-volatility proxy."""
+    window_spec = Window.partitionBy("symbol").orderBy("open_time").rowsBetween(-(window_size - 1), 0)
+    return df.withColumn(f"volatility_{window_size}", F.stddev("returns").over(window_spec))
+
+
 def write_curated(df: DataFrame, output_path: str) -> None:
     output_dir = Path(output_path)
     output_dir.mkdir(parents=True, exist_ok=True)
-    df.write.mode("overwrite").partitionBy("symbol").parquet(str(output_dir))
+    df.repartition("symbol", "year_month").write.mode("overwrite").partitionBy("symbol", "year_month").parquet(
+        str(output_dir)
+    )
 
 
 def run_curated_pipeline(spark: SparkSession, input_path: str, output_path: str) -> DataFrame:
@@ -50,21 +62,6 @@ def run_curated_pipeline(spark: SparkSession, input_path: str, output_path: str)
     df = add_time_ordering(df)
     df = add_moving_averages(df, [20, 50])
     df = add_vwap(df)
+    df = add_rolling_volatility(df)
     write_curated(df, output_path)
     return df
-
-
-if __name__ == "__main__":
-    import sys
-
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from spark_session import create_spark_session
-
-    spark = create_spark_session()
-    input_path = "data/refined"
-    output_path = "data/curated"
-
-    df = run_curated_pipeline(spark, input_path, output_path)
-    print(f"Curated rows written: {df.count()}")
-    spark.stop()
-

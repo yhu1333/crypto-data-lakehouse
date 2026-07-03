@@ -1,15 +1,26 @@
 from pyspark.sql import Row
 
-from src.transforms.quality import quality_summary
+from src.transforms.quality import build_quality_report
 
 
-def test_quality_summary_marks_data_availability_status(spark):
-    rows = [
-        Row(symbol="BTCUSDT", open_time=1, close=100.0, high=110.0, low=90.0, volume=10.0, returns=0.0),
-        Row(symbol="BTCUSDT", open_time=2, close=110.0, high=115.0, low=95.0, volume=10.0, returns=0.1),
-    ]
+def _row(open_time, symbol="BTCUSDT", close=100.0, high=110.0, low=90.0, open=100.0):
+    return Row(symbol=symbol, open_time=open_time, close=close, high=high, low=low, open=open)
+
+
+def test_build_quality_report_marks_clean_contiguous_data_as_pass(spark):
+    rows = [_row(0), _row(60_000), _row(120_000)]
     df = spark.createDataFrame(rows)
 
-    report = quality_summary(df)
+    report = build_quality_report(df)
 
-    assert report["data_availability_status"] == "pass"
+    assert report["status"] == "pass"
+
+
+def test_build_quality_report_marks_sparse_data_as_fail(spark):
+    rows = [_row(0), _row(60_000 * 1000)]
+    df = spark.createDataFrame(rows)
+
+    report = build_quality_report(df)
+
+    assert report["status"] == "fail"
+    assert report["completeness"][0]["completeness_ratio"] < 0.9
