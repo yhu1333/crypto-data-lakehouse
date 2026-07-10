@@ -1,4 +1,3 @@
-![CI](https://github.com/yhu1333/crypto-data-lakehouse/actions/workflows/ci.yml/badge.svg)
 # Crypto Data Lakehouse
 
 ![CI](https://github.com/yhu1333/crypto-data-lakehouse/actions/workflows/ci.yml/badge.svg)
