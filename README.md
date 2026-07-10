@@ -1,6 +1,8 @@
 ![CI](https://github.com/yhu1333/crypto-data-lakehouse/actions/workflows/ci.yml/badge.svg)
 # Crypto Data Lakehouse
 
+![CI](https://github.com/yhu1333/crypto-data-lakehouse/actions/workflows/ci.yml/badge.svg)
+
 A PySpark data engineering pipeline that ingests Binance 1-minute OHLCV (kline) data for
 multiple symbols, cleans and integrates it into a unified "golden copy," and validates it
 with an automated data-quality report. Runs entirely locally (`local[*]` Spark) and writes
@@ -97,13 +99,25 @@ interval, 2022-01 through 2025-12 (4 years).
   which cut `data/raw` for that same run to 115MB and made writes dramatically faster — a
   concrete example of matching partition grain to query/row-density patterns rather than
   defaulting to the finest available column.
-- **Timestamp precision**: Binance's `data.binance.vision` kline dumps switched from
-  millisecond to microsecond epoch timestamps starting with 2025 data, with no flag in the
-  file to distinguish them. `transforms/raw.py` normalizes both `open_time` and `close_time`
-  to milliseconds by magnitude (values above `10**14` are treated as microseconds) so every
-  downstream stage can assume one unit.
 - **Explicit schema over `inferSchema`**: avoids Spark silently mis-typing columns and makes
   schema drift a visible, testable failure instead of a runtime surprise.
 - **Fail-loud quality gate**: `run_pipeline.py` raises if the quality report status is
   `fail`, so a broken run can't silently produce a "curated" dataset downstream consumers
   would trust.
+
+### Debugging a silent upstream schema change
+
+Binance's `data.binance.vision` kline dumps switched `open_time`/`close_time` from
+millisecond to microsecond epoch precision starting with 2025 data — with no flag or schema
+change in the file to signal the switch. Every downstream consumer had been assuming
+millisecond epochs, so a raw microsecond value read as milliseconds lands roughly 1,000x
+further in the future than it should: it was corrupting downstream time calculations
+(partitioning by `year_month`, gap detection, return/volatility windows) for every 2025 row
+before the fix, without throwing a single error. `transforms/raw.py` now normalizes both
+columns to milliseconds by magnitude (`MICROSECOND_THRESHOLD = 10**14` — real epoch-ms
+values sit well below it, epoch-us values well above), so every downstream stage can safely
+assume one unit.
+
+---
+
+CI runs `ruff check .` and `pytest -q` on every push and pull request (see badge above).
