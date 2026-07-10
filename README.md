@@ -1,3 +1,4 @@
+![CI](https://github.com/yhu1333/crypto-data-lakehouse/actions/workflows/ci.yml/badge.svg)
 # Crypto Data Lakehouse
 
 A PySpark data engineering pipeline that ingests Binance 1-minute OHLCV (kline) data for
